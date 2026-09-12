@@ -1,0 +1,30 @@
+{
+  "context-menu": {
+    ".cm-editor, .mde-preview": [
+      {
+        "label": "Abrir en Teleprompter",
+        "command": "inkdrop-teleprompter:toggle"
+      }
+    ]
+  },
+  "menu": [
+    {
+      "label": "Plugins",
+      "submenu": [
+        {
+          "label": "Teleprompter",
+          "submenu": [
+            {
+              "label": "Abrir / Cerrar",
+              "command": "inkdrop-teleprompter:toggle"
+            },
+            {
+              "label": "Abrir en segunda ventana",
+              "command": "inkdrop-teleprompter:open-window"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

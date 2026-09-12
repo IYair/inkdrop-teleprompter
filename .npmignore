@@ -1,0 +1,10 @@
+node_modules
+src
+test
+scripts
+native/Info.plist
+native/TeleprompterVoice.swift
+tsconfig.json
+tsdown.config.js
+package-lock.json
+*.tgz

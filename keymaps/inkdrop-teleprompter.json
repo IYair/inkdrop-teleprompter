@@ -1,0 +1,8 @@
+{
+  "body": {
+    "cmd-alt-t": "inkdrop-teleprompter:toggle",
+    "ctrl-alt-t": "inkdrop-teleprompter:toggle",
+    "cmd-alt-shift-t": "inkdrop-teleprompter:open-window",
+    "ctrl-alt-shift-t": "inkdrop-teleprompter:open-window"
+  }
+}
