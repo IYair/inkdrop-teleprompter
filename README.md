@@ -15,7 +15,7 @@ A local-first teleprompter that turns the active Inkdrop note into a clean, resp
 
 ## Install
 
-Install **inkdrop-teleprompter** from **Preferences → Plugins** in Inkdrop, then open any note.
+Install **teleprompter** from **Preferences → Plugins** in Inkdrop, then open any note.
 
 Use the teleprompter icon in the editor view controls, choose **Plugins → Teleprompter → Abrir / Cerrar**, or press:
 
