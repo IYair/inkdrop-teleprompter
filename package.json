@@ -1,7 +1,7 @@
 {
   "name": "teleprompter",
   "main": "./lib/index",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "description": "A local-first teleprompter for reading the active Inkdrop note while recording.",
   "author": "Yair Chan",
   "repository": {

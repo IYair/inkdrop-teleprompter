@@ -98,6 +98,11 @@ body.teleprompter-dedicated-window .teleprompter-modal.ui.modal {
   height: 100vh !important;
 }
 
+/* Keep the note title clear of the native macOS window controls in either view. */
+.teleprompter-shell.is-macos .teleprompter-topbar {
+  padding-left: 94px;
+}
+
 .teleprompter-topbar {
   z-index: 5;
   display: grid;
@@ -118,12 +123,15 @@ body.teleprompter-dedicated-window .teleprompter-modal.ui.modal {
 .teleprompter-rec-dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: var(--tp-muted); opacity: 0.65; transition: background 180ms ease, box-shadow 180ms ease, opacity 180ms ease; }
 .teleprompter-rec-dot.is-live { background: var(--tp-accent); box-shadow: 0 0 0 5px var(--tp-accent-soft), 0 0 18px color-mix(in srgb, var(--tp-accent) 50%, transparent); opacity: 1; }
 
-.teleprompter-mode-tabs { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--tp-line); border-radius: 7px; background: var(--tp-control); }
+.teleprompter-profile-strip { display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; }
+.teleprompter-mode-tabs { display: flex; min-width: 0; gap: 3px; padding: 3px; border: 1px solid var(--tp-line); border-radius: 7px; background: var(--tp-control); }
 .teleprompter-mode-tabs button, .teleprompter-controls button, .teleprompter-close { border: 0; color: var(--tp-muted); background: transparent; font: inherit; cursor: pointer; }
 .teleprompter-mode-tabs button { padding: 7px 12px; border-radius: 4px; font-size: 11px; }
 .teleprompter-mode-tabs button:hover:not(:disabled) { color: var(--tp-ink); }
 .teleprompter-mode-tabs button.is-active { color: var(--tp-on-accent); background: var(--tp-accent); font-weight: 700; }
 .teleprompter-mode-tabs button:disabled { opacity: 0.25; cursor: not-allowed; }
+.teleprompter-manage-profiles { width: 30px; height: 30px; flex: 0 0 auto; padding: 0 0 2px; border: 1px solid var(--tp-line); border-radius: 50%; color: var(--tp-muted); background: var(--tp-control); font-family: inherit; font-size: 21px; font-weight: 400; line-height: 1; cursor: pointer; }
+.teleprompter-manage-profiles:hover, .teleprompter-manage-profiles.is-active { color: var(--tp-ink); border-color: var(--tp-accent); background: var(--tp-accent-soft); }
 
 .teleprompter-close { justify-self: end; width: 36px; height: 36px; border: 1px solid var(--tp-line); border-radius: 50%; color: var(--tp-ink); font-size: 25px; line-height: 1; }
 .teleprompter-close:hover { border-color: var(--tp-line-strong); background: var(--button-hover-background-color, var(--tp-accent-soft)); }
@@ -147,9 +155,7 @@ body.teleprompter-dedicated-window .teleprompter-modal.ui.modal {
 .teleprompter-slider input:disabled { opacity: 0.35; }
 .teleprompter-second-window { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--tp-line) !important; border-radius: 50%; color: var(--tp-muted) !important; background: transparent; cursor: pointer; }
 .teleprompter-second-window:hover { color: var(--tp-ink) !important; border-color: var(--tp-line-strong) !important; background: var(--button-hover-background-color, var(--tp-accent-soft)); }
-.teleprompter-second-window-icon { position: relative; width: 18px; height: 18px; background: linear-gradient(45deg, transparent 43%, currentColor 44% 54%, transparent 55%) 8px 1px / 8px 8px no-repeat; }
-.teleprompter-second-window-icon::before { position: absolute; bottom: 1px; left: 1px; width: 11px; height: 10px; border: 1.5px solid currentColor; border-radius: 1px; content: ""; }
-.teleprompter-second-window-icon::after { position: absolute; top: 1px; right: 1px; width: 6px; height: 6px; border-top: 1.5px solid currentColor; border-right: 1.5px solid currentColor; content: ""; }
+.teleprompter-second-window .icon { margin: 0 !important; font-size: 18px; }
 .teleprompter-viewport { position: relative; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; }
 .teleprompter-viewport::-webkit-scrollbar { display: none; }
 
@@ -169,8 +175,59 @@ body.teleprompter-dedicated-window .teleprompter-modal.ui.modal {
 .teleprompter-empty span { color: var(--tp-accent); font-size: 10px; font-weight: 800; letter-spacing: 0.24em; }
 .teleprompter-empty h2 { margin: 12px 0 6px; font-family: Georgia, serif; font-size: 34px; font-weight: 400; }
 .teleprompter-empty p { color: var(--tp-muted); }
+.teleprompter-empty code { justify-self: center; max-width: min(100%, 620px); margin-top: 16px; padding: 9px 12px; overflow: hidden; border: 1px solid var(--tp-line); border-radius: 5px; color: var(--tp-ink); background: var(--tp-control); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.teleprompter-empty button { justify-self: center; padding: 8px 13px; border: 1px solid var(--tp-line); border-radius: 5px; color: var(--tp-ink); background: var(--tp-control); cursor: pointer; }
+.teleprompter-empty button:hover { border-color: var(--tp-accent); background: var(--tp-accent-soft); }
 
-.teleprompter-controls { z-index: 5; display: grid; grid-template-columns: auto auto minmax(120px, 1fr) minmax(120px, 1fr) minmax(126px, auto) auto auto; align-items: center; gap: 16px; padding: 16px 28px 22px; border-top: 1px solid var(--tp-line); background: color-mix(in srgb, var(--tp-panel) 94%, transparent); backdrop-filter: blur(18px); transition: opacity 180ms ease; }
+.teleprompter-profile-manager-backdrop { position: absolute; z-index: 20; inset: 0; display: grid; place-items: center; padding: 28px; background: color-mix(in srgb, var(--tp-bg) 68%, transparent); backdrop-filter: blur(12px); }
+.teleprompter-profile-manager { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(760px, 100%); max-height: min(820px, calc(100vh - 56px)); overflow: hidden; border: 1px solid var(--tp-line-strong); border-radius: 12px; color: var(--tp-ink); background: color-mix(in srgb, var(--tp-panel) 97%, var(--tp-bg)); box-shadow: 0 28px 90px color-mix(in srgb, #000 48%, transparent); }
+.teleprompter-profile-manager > header { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 24px 18px; border-bottom: 1px solid var(--tp-line); }
+.teleprompter-profile-manager > header h2 { margin: 4px 0 0; font-family: Georgia, "Times New Roman", serif; font-size: 27px; font-weight: 400; letter-spacing: -0.02em; }
+.teleprompter-profile-manager > header button { width: 34px; height: 34px; padding: 0; border: 1px solid var(--tp-line); border-radius: 50%; color: var(--tp-ink); background: transparent; font-family: inherit; font-size: 24px; font-weight: 300; line-height: 1; cursor: pointer; }
+.teleprompter-profile-manager > header button:hover { border-color: var(--tp-accent); background: var(--tp-accent-soft); }
+.teleprompter-profile-manager-scroll { min-height: 0; overflow-y: auto; padding: 8px 24px 24px; scrollbar-color: var(--tp-line-strong) transparent; }
+.teleprompter-profile-manager-section { padding-top: 18px; }
+.teleprompter-profile-manager-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 9px; }
+.teleprompter-profile-manager-heading > div { display: grid; gap: 2px; }
+.teleprompter-profile-manager-heading strong { font-size: 12px; letter-spacing: 0.03em; }
+.teleprompter-profile-manager-heading span { color: var(--tp-muted); font-size: 10px; }
+.teleprompter-profile-manager-heading > span { padding: 2px 7px; border: 1px solid var(--tp-line); border-radius: 999px; font-variant-numeric: tabular-nums; }
+.teleprompter-profile-list { overflow: hidden; border: 1px solid var(--tp-line); border-radius: 7px; background: color-mix(in srgb, var(--tp-control) 56%, transparent); }
+.teleprompter-profile-list article { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 54px; padding: 10px 12px; border-bottom: 1px solid var(--tp-line); }
+.teleprompter-profile-list article:last-child { border-bottom: 0; }
+.teleprompter-profile-list article.is-muted { opacity: 0.48; }
+.teleprompter-profile-list article > div:first-child { display: grid; min-width: 0; gap: 3px; }
+.teleprompter-profile-list article strong { font-size: 12px; font-weight: 650; }
+.teleprompter-profile-list article span, .teleprompter-profile-list article code { overflow: hidden; color: var(--tp-muted); font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.teleprompter-profile-list article code { color: color-mix(in srgb, var(--tp-accent) 72%, var(--tp-ink)); }
+.teleprompter-profile-list article button, .teleprompter-profile-manager > footer button { padding: 6px 9px; border: 1px solid var(--tp-line); border-radius: 4px; color: var(--tp-ink); background: transparent; font-family: inherit; font-size: 10px; font-weight: 500; line-height: 1; cursor: pointer; }
+.teleprompter-profile-list article button:hover, .teleprompter-profile-manager > footer button:hover { border-color: var(--tp-accent); background: var(--tp-accent-soft); }
+.teleprompter-profile-list article button.is-danger:hover { color: var(--tp-on-accent); border-color: var(--tp-accent); background: var(--tp-accent); }
+.teleprompter-profile-list article button.is-primary { color: var(--tp-on-accent); border-color: var(--tp-accent); background: var(--tp-accent); }
+.teleprompter-profile-list article button:disabled { opacity: 0.35; cursor: not-allowed; }
+.teleprompter-profile-row-actions { display: flex !important; grid-template-columns: none !important; flex: 0 0 auto; gap: 5px !important; }
+.teleprompter-profile-list article.is-editing { padding: 13px; background: var(--tp-accent-faint); }
+.teleprompter-edit-profile { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(160px, 1fr) auto; align-items: end; width: 100%; gap: 10px; }
+.teleprompter-edit-profile label { display: grid; min-width: 0; gap: 5px; }
+.teleprompter-edit-profile label > span { color: var(--tp-muted); font-size: 8px; font-weight: 750; letter-spacing: 0.15em; }
+.teleprompter-new-profile { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) auto; gap: 10px; margin-top: 10px; padding: 14px; border: 1px dashed var(--tp-line-strong); border-radius: 7px; background: var(--tp-accent-faint); }
+.teleprompter-new-profile-title { grid-column: 1 / -1; display: grid; gap: 2px; margin-bottom: 2px; }
+.teleprompter-new-profile-title strong { font-size: 12px; }
+.teleprompter-new-profile-title span { color: var(--tp-muted); font-size: 10px; }
+.teleprompter-new-profile label { display: grid; min-width: 0; gap: 5px; }
+.teleprompter-new-profile label > span { color: var(--tp-muted); font-size: 8px; font-weight: 750; letter-spacing: 0.15em; }
+.teleprompter-new-profile input, .teleprompter-edit-profile input { width: 100%; min-width: 0; height: 34px; padding: 0 9px; border: 1px solid var(--tp-line); border-radius: 4px; outline: 0; color: var(--tp-ink); background: var(--tp-control); font-family: inherit; font-size: 11px; }
+.teleprompter-new-profile input:focus, .teleprompter-edit-profile input:focus { border-color: var(--tp-accent); box-shadow: 0 0 0 2px var(--tp-accent-soft); }
+.teleprompter-marker-input { display: flex; align-items: center; min-width: 0; height: 34px; padding-left: 9px; border: 1px solid var(--tp-line); border-radius: 4px; background: var(--tp-control); }
+.teleprompter-marker-input:focus-within { border-color: var(--tp-accent); box-shadow: 0 0 0 2px var(--tp-accent-soft); }
+.teleprompter-marker-input > span { flex: 0 0 auto; color: var(--tp-muted); font: 10px monospace; }
+.teleprompter-marker-input input { height: 32px; padding-left: 0; border: 0; background: transparent; font-family: monospace; box-shadow: none !important; }
+.teleprompter-create-profile { align-self: end; height: 34px; padding: 0 13px; border: 1px solid var(--tp-accent); border-radius: 4px; color: var(--tp-on-accent); background: var(--tp-accent); font-family: inherit; font-size: 10px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.teleprompter-create-profile:disabled { opacity: 0.35; cursor: not-allowed; }
+.teleprompter-profile-manager > footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 48px; padding: 10px 24px; border-top: 1px solid var(--tp-line); color: var(--tp-muted); background: color-mix(in srgb, var(--tp-control) 68%, transparent); font-size: 10px; }
+.teleprompter-profile-manager > footer span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.teleprompter-controls { z-index: 5; display: grid; grid-template-columns: auto minmax(120px, 1fr) minmax(120px, 1fr) minmax(126px, auto) auto auto; align-items: center; gap: 16px; padding: 16px 28px 22px; border-top: 1px solid var(--tp-line); background: color-mix(in srgb, var(--tp-panel) 94%, transparent); backdrop-filter: blur(18px); transition: opacity 180ms ease; }
 .controls-hidden .teleprompter-topbar, .controls-hidden .teleprompter-controls { opacity: 0; pointer-events: none; }
 .teleprompter-control-group { display: flex; align-items: center; gap: 6px; }
 .teleprompter-transport button { width: 38px; height: 38px; border: 1px solid var(--tp-line); border-radius: 50%; font-size: 18px; }
@@ -203,11 +260,14 @@ body.teleprompter-dedicated-window .teleprompter-modal.ui.modal {
     gap: 8px 16px;
     padding: 10px 18px;
   }
-  .teleprompter-mode-tabs {
+  .teleprompter-profile-strip {
     grid-row: 2;
     grid-column: 1 / -1;
     justify-self: center;
     max-width: 100%;
+  }
+  .teleprompter-mode-tabs {
+    max-width: calc(100% - 37px);
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -217,7 +277,7 @@ body.teleprompter-dedicated-window .teleprompter-modal.ui.modal {
     gap: 12px;
     padding: 12px 18px 17px;
   }
-  .teleprompter-profile, .teleprompter-countdown-select { display: none; }
+  .teleprompter-countdown-select { display: none; }
 }
 
 @media (max-width: 720px) {
@@ -231,7 +291,8 @@ body.teleprompter-dedicated-window .teleprompter-modal.ui.modal {
   .teleprompter-kicker { font-size: 8px; }
   .teleprompter-top-actions { gap: 7px; }
   .teleprompter-voice-status { max-width: min(34vw, 170px); }
-  .teleprompter-mode-tabs { justify-self: stretch; }
+  .teleprompter-profile-strip { justify-self: stretch; }
+  .teleprompter-mode-tabs { flex: 1 1 auto; }
   .teleprompter-mode-tabs button { min-width: max-content; flex: 1 0 auto; padding: 6px 9px; font-size: 10px; }
   .teleprompter-controls {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -244,6 +305,14 @@ body.teleprompter-dedicated-window .teleprompter-modal.ui.modal {
   .teleprompter-font-family-select select { width: 100%; min-width: 0; max-width: none; }
   .teleprompter-metrics { display: none; }
   .teleprompter-script { padding-top: 34vh; padding-bottom: 52vh; }
+  .teleprompter-profile-manager-backdrop { padding: 12px; }
+  .teleprompter-profile-manager { max-height: calc(100vh - 24px); }
+  .teleprompter-profile-manager > header, .teleprompter-profile-manager-scroll { padding-inline: 16px; }
+  .teleprompter-profile-manager > footer { padding-inline: 16px; }
+  .teleprompter-new-profile { grid-template-columns: 1fr; }
+  .teleprompter-edit-profile { grid-template-columns: 1fr; }
+  .teleprompter-edit-profile .teleprompter-profile-row-actions { justify-content: flex-end; }
+  .teleprompter-create-profile { width: 100%; }
 }
 
 @media (max-width: 480px) {
@@ -263,12 +332,12 @@ body.teleprompter-dedicated-window .teleprompter-modal.ui.modal {
   .teleprompter-shell { grid-template-rows: auto minmax(0, 1fr) auto; }
   .teleprompter-topbar { padding: 0 16px; }
   .teleprompter-controls { padding: 9px 16px 14px; }
-  .teleprompter-profile, .teleprompter-countdown-select, .teleprompter-metrics { display: none; }
+  .teleprompter-countdown-select, .teleprompter-metrics { display: none; }
   .teleprompter-countdown { inset: 54px 0 78px; }
 }
 
 @media (max-height: 520px) and (max-width: 1100px) {
-  .teleprompter-mode-tabs { display: none; }
+  .teleprompter-profile-strip { display: none; }
   .teleprompter-controls { grid-template-columns: auto minmax(100px, 1fr) minmax(100px, 1fr) minmax(126px, auto); }
   .teleprompter-font-family-select select { max-width: 22vw; }
 }

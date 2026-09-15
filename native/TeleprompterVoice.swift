@@ -17,6 +17,15 @@ final class VoiceService: NSObject, NSApplicationDelegate {
     var stopping = false
     var recentFailures: [Date] = []
     var lastText = ""
+    var language = "es"
+
+    var preferredLocales: [String] {
+        language == "en"
+            ? ["en-US", "en-GB", "en-CA", "en-AU"]
+            : ["es-MX", "es-ES", "es-US"]
+    }
+
+    var languageName: String { language == "en" ? "inglés" : "español" }
 
     func emit(_ value: [String: Any]) {
         guard socket >= 0, let data = try? JSONSerialization.data(withJSONObject: value) else { return }
@@ -41,6 +50,9 @@ final class VoiceService: NSObject, NSApplicationDelegate {
         let args = CommandLine.arguments
         guard let flag = args.firstIndex(of: "--socket"), args.count > flag + 1 else { shutdown(); return }
         let path = args[flag + 1]
+        if let languageFlag = args.firstIndex(of: "--language"), args.count > languageFlag + 1 {
+            language = args[languageFlag + 1] == "en" ? "en" : "es"
+        }
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
         let pathBytes = Array(path.utf8CString)
@@ -85,11 +97,11 @@ final class VoiceService: NSObject, NSApplicationDelegate {
     }
 
     func prepare() {
-        recognizer = ["es-MX", "es-ES", "es-US"].compactMap {
+        recognizer = preferredLocales.compactMap {
             SFSpeechRecognizer(locale: Locale(identifier: $0))
         }.first { $0.supportsOnDeviceRecognition }
         guard recognizer != nil else {
-            fail("El reconocimiento local en español no está disponible. Configura Dictado en español en Ajustes del Sistema → Teclado y vuelve a intentarlo.")
+            fail("El reconocimiento local en \(languageName) no está disponible. Configura Dictado en \(languageName) en Ajustes del Sistema → Teclado y vuelve a intentarlo.")
             return
         }
         beginSession()
@@ -142,7 +154,7 @@ final class VoiceService: NSObject, NSApplicationDelegate {
                     self.recentFailures = self.recentFailures.filter { Date().timeIntervalSince($0) < 15 }
                     self.recentFailures.append(Date())
                     if self.recentFailures.count >= 3 {
-                        self.fail("No se pudo iniciar el reconocimiento local. Revisa Dictado en español y tu micrófono. \(error.localizedDescription)")
+                        self.fail("No se pudo iniciar el reconocimiento local. Revisa Dictado en \(self.languageName) y tu micrófono. \(error.localizedDescription)")
                     } else { self.scheduleRestart(session) }
                 }
             }
@@ -176,7 +188,7 @@ final class VoiceService: NSObject, NSApplicationDelegate {
 }
 
 if CommandLine.arguments.contains("--check") {
-    let locales = ["es-MX", "es-ES", "es-US"].map { locale -> [String: Any] in
+    let locales = ["es-MX", "es-ES", "es-US", "en-US", "en-GB", "en-CA", "en-AU"].map { locale -> [String: Any] in
         let recognizer = SFSpeechRecognizer(locale: Locale(identifier: locale))
         return ["locale": locale, "onDevice": recognizer?.supportsOnDeviceRecognition ?? false]
     }

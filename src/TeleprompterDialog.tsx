@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSelector } from 'react-redux'
 import { useModal } from 'inkdrop'
-import type { Dialog as DialogClass } from '@inkdropapp/types'
+import type { ButtonProps, Dialog as DialogClass } from '@inkdropapp/types'
 import { getEnv } from './env'
-import { getScriptOptions, type ScriptMode } from './extractScript'
+import { detectScriptLanguage, getScriptOptions, type ScriptMode } from './extractScript'
 import { ScrollEngine } from './scrollEngine'
 import { VoiceTracker } from './voiceTracking'
 import { NativeVoice } from './nativeVoice'
@@ -17,13 +17,25 @@ import {
 } from './fontFamilies'
 import {
   formatDuration,
-  findMatchingProfile,
   getDedicatedSnapshot,
-  getProfile,
-  moveBlock,
-  profiles,
-  type ProfileId
+  moveBlock
 } from './phaseTwo'
+import {
+  builtInScriptProfiles,
+  createCustomScriptProfile,
+  CUSTOM_PROFILES_STORAGE_KEY,
+  getCustomProfileMarkers,
+  HIDDEN_PROFILES_STORAGE_KEY,
+  isVisibleScriptProfile,
+  normalizeProfileMarker,
+  parseCustomScriptProfiles,
+  parseHiddenScriptProfiles,
+  serializeCustomScriptProfiles,
+  serializeHiddenScriptProfiles,
+  updateCustomScriptProfile,
+  type CustomScriptProfile,
+  type RemovableBuiltInProfileId
+} from './scriptProfiles'
 
 interface EditingNote {
   _id?: string
@@ -33,11 +45,13 @@ interface EditingNote {
 
 const SECOND_WINDOW_KEY = 'inkdrop-teleprompter:pending-window'
 const CURRENT_WINDOW_ID = new URLSearchParams(window.location.search).get('windowId') || 'unknown'
+const IS_MACOS = navigator.platform.toLowerCase().startsWith('mac')
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
 export const TeleprompterDialog: React.FC = () => {
   const modal = useModal()
   const Dialog = getEnv().components.getComponentClass('Dialog') as DialogClass
+  const Button = getEnv().components.getComponentClass<ButtonProps>('Button') as React.FC<ButtonProps>
   const editingNote = useSelector((state: any) => state.editingNote) as EditingNote | undefined
   const viewportRef = useRef<HTMLDivElement>(null)
   const scriptRef = useRef<HTMLDivElement>(null)
@@ -68,7 +82,18 @@ export const TeleprompterDialog: React.FC = () => {
   const [snapshot, setSnapshot] = useState<EditingNote>({})
   const [dedicated, setDedicated] = useState(false)
   const [mode, setMode] = useState<ScriptMode>('auto')
-  const [profile, setProfile] = useState<ProfileId | 'custom'>(() => findMatchingProfile(initialSettings))
+  const [customScriptProfiles, setCustomScriptProfiles] = useState<CustomScriptProfile[]>(() =>
+    parseCustomScriptProfiles(window.localStorage.getItem(CUSTOM_PROFILES_STORAGE_KEY)))
+  const [hiddenScriptProfiles, setHiddenScriptProfiles] = useState<RemovableBuiltInProfileId[]>(() =>
+    parseHiddenScriptProfiles(window.localStorage.getItem(HIDDEN_PROFILES_STORAGE_KEY)))
+  const [profileManagerOpen, setProfileManagerOpen] = useState(false)
+  const [draftProfileLabel, setDraftProfileLabel] = useState('')
+  const [draftProfileMarker, setDraftProfileMarker] = useState('')
+  const [profileMessage, setProfileMessage] = useState('')
+  const [lastDeletedProfile, setLastDeletedProfile] = useState<CustomScriptProfile | null>(null)
+  const [editingProfileId, setEditingProfileId] = useState<CustomScriptProfile['id'] | null>(null)
+  const [editProfileLabel, setEditProfileLabel] = useState('')
+  const [editProfileMarker, setEditProfileMarker] = useState('')
   const [playing, setPlaying] = useState(false)
   const [countdownValue, setCountdownValue] = useState<number | null>(null)
   const [progress, setProgress] = useState(0)
@@ -95,11 +120,17 @@ export const TeleprompterDialog: React.FC = () => {
     })
   }
 
-  const options = useMemo(() => getScriptOptions(snapshot.body || ''), [snapshot.body])
+  const allOptions = useMemo(() => getScriptOptions(snapshot.body || '', customScriptProfiles),
+    [customScriptProfiles, snapshot.body])
+  const options = useMemo(() => allOptions.filter(option =>
+    isVisibleScriptProfile(option.id, Boolean(option.custom), hiddenScriptProfiles)
+  ), [allOptions, hiddenScriptProfiles])
   const selected = options.find(option => option.id === mode) || options[0]
   const paragraphs = useMemo(() => selected.text.split(/\n{2,}/).filter(Boolean), [selected.text])
   const tracker = useMemo(() => new VoiceTracker(paragraphs), [paragraphs])
   const wordCount = selected.text.trim() ? selected.text.trim().split(/\s+/).length : 0
+  const scriptLanguage = useMemo(() => detectScriptLanguage(selected.text), [selected.text])
+  const languageLabel = scriptLanguage === 'en' ? 'Inglés' : 'Español'
   const selectedLocalFont = getLocalFontFamily(fontFamily)
 
   const loadDeviceFonts = useCallback(async () => {
@@ -120,7 +151,7 @@ export const TeleprompterDialog: React.FC = () => {
     setActivePhrase(match.phrase)
     setVoiceWord(match.word)
     setCurrentBlock(tracker.script.phrases[match.phrase].paragraph)
-    setVoiceStatus('Siguiendo tu voz · Español · Local')
+    setVoiceStatus(`Siguiendo tu voz · ${languageLabel} · Local`)
   }
 
   useEffect(() => {
@@ -172,12 +203,12 @@ export const TeleprompterDialog: React.FC = () => {
       voiceRef.current = new NativeVoice({
         onText: text => voiceCallbacksRef.current.onText(text),
         onStatus: message => setVoiceStatus(message),
-        onReady: () => setVoiceStatus('Escuchando · Lee al menos tres palabras'),
+        onReady: locale => setVoiceStatus(`Escuchando · ${languageLabel}${locale ? ` (${locale})` : ''} · Lee al menos tres palabras`),
         onError: message => { setPlaying(false); setVoiceStatus(message) }
-      })
+      }, scriptLanguage)
       voiceRef.current.start()
     } else scrollEngineRef.current?.start()
-  }, [cancelCountdown, followVoice])
+  }, [cancelCountdown, followVoice, languageLabel, scriptLanguage])
 
   const play = useCallback(() => {
     if (playing || countdownValue !== null || !selected.text) return
@@ -201,6 +232,7 @@ export const TeleprompterDialog: React.FC = () => {
       body: note?.body || ''
     })
     setMode('auto')
+    setProfileManagerOpen(false)
     setControlsHidden(false)
     setProgress(0)
     setCurrentBlock(0)
@@ -319,6 +351,13 @@ export const TeleprompterDialog: React.FC = () => {
     if (!modal.state.visible) return
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
+      if (profileManagerOpen) {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          setProfileManagerOpen(false)
+        }
+        return
+      }
       if (/INPUT|SELECT/.test(target.tagName)) return
       if (event.code === 'Space') {
         event.preventDefault()
@@ -326,11 +365,9 @@ export const TeleprompterDialog: React.FC = () => {
       } else if (event.key === 'ArrowUp') {
         event.preventDefault()
         setSpeed(value => clamp(value + 5, 60, 240))
-        setProfile('custom')
       } else if (event.key === 'ArrowDown') {
         event.preventDefault()
         setSpeed(value => clamp(value - 5, 60, 240))
-        setProfile('custom')
       } else if (event.key === 'ArrowLeft') {
         event.preventDefault()
         goToBlock(-1)
@@ -343,14 +380,22 @@ export const TeleprompterDialog: React.FC = () => {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [countdownValue, goToBlock, modal.state.visible, pause, play, playing, reset, toggle])
+  }, [countdownValue, goToBlock, modal.state.visible, pause, play, playing, profileManagerOpen, reset, toggle])
 
   useEffect(() => { getEnv().config.set('inkdrop-teleprompter.speedWpm', speed) }, [speed])
   useEffect(() => { getEnv().config.set('inkdrop-teleprompter.fontSize', fontSize) }, [fontSize])
   useEffect(() => { getEnv().config.set('inkdrop-teleprompter.fontFamily', fontFamily) }, [fontFamily])
   useEffect(() => { getEnv().config.set('inkdrop-teleprompter.countdown', countdown) }, [countdown])
   useEffect(() => { getEnv().config.set('inkdrop-teleprompter.mirror', mirror) }, [mirror])
-  useEffect(() => { getEnv().config.set('inkdrop-teleprompter.profile', profile) }, [profile])
+  useEffect(() => {
+    window.localStorage.setItem(CUSTOM_PROFILES_STORAGE_KEY, serializeCustomScriptProfiles(customScriptProfiles))
+  }, [customScriptProfiles])
+  useEffect(() => {
+    window.localStorage.setItem(HIDDEN_PROFILES_STORAGE_KEY, serializeHiddenScriptProfiles(hiddenScriptProfiles))
+  }, [hiddenScriptProfiles])
+  useEffect(() => {
+    if (!options.some(option => option.id === mode)) setMode('auto')
+  }, [mode, options])
   useEffect(() => () => {
     voiceRef.current?.stop()
     stopAnimation()
@@ -383,12 +428,97 @@ export const TeleprompterDialog: React.FC = () => {
     reset()
   }
 
-  const applyProfile = (id: ProfileId) => {
-    const next = getProfile(id)
-    setProfile(id)
-    setSpeed(next.speedWpm)
-    setFontSize(next.fontSize)
-    setCountdown(next.countdown)
+  const toggleBuiltInScriptProfile = (id: RemovableBuiltInProfileId) => {
+    const isHidden = hiddenScriptProfiles.includes(id)
+    setHiddenScriptProfiles(current => isHidden ? current.filter(item => item !== id) : [...current, id])
+    if (!isHidden && mode === id) {
+      setMode('auto')
+      reset()
+    }
+    setProfileMessage(isHidden ? 'Perfil restaurado.' : 'Perfil quitado. Puedes restaurarlo cuando quieras.')
+  }
+
+  const deleteCustomScriptProfile = (item: CustomScriptProfile) => {
+    setCustomScriptProfiles(current => current.filter(profile => profile.id !== item.id))
+    setLastDeletedProfile(item)
+    if (editingProfileId === item.id) setEditingProfileId(null)
+    if (mode === item.id) {
+      setMode('auto')
+      reset()
+    }
+    setProfileMessage(`“${item.label}” fue eliminado.`)
+  }
+
+  const undoDeleteCustomProfile = () => {
+    if (!lastDeletedProfile) return
+    setCustomScriptProfiles(current => current.some(item => item.marker === lastDeletedProfile.marker)
+      ? current : [...current, lastDeletedProfile])
+    setProfileMessage(`“${lastDeletedProfile.label}” fue restaurado.`)
+    setLastDeletedProfile(null)
+  }
+
+  const createScriptProfile = (event: React.FormEvent) => {
+    event.preventDefault()
+    const next = createCustomScriptProfile(draftProfileLabel, draftProfileMarker)
+    if (!next) {
+      setProfileMessage('Escribe un nombre y un marcador único. Evita los nombres reservados.')
+      return
+    }
+    if (customScriptProfiles.some(item => item.marker === next.marker)) {
+      setProfileMessage('Ese marcador ya pertenece a otro perfil.')
+      return
+    }
+    if (customScriptProfiles.length >= 20) {
+      setProfileMessage('Puedes guardar hasta 20 perfiles personalizados.')
+      return
+    }
+    setCustomScriptProfiles(current => [...current, next])
+    setDraftProfileLabel('')
+    setDraftProfileMarker('')
+    setLastDeletedProfile(null)
+    setProfileMessage(`“${next.label}” está listo. Copia su marcador y colócalo en tu nota.`)
+  }
+
+  const copyCustomProfileMarkers = async (item: CustomScriptProfile) => {
+    try {
+      await navigator.clipboard.writeText(getCustomProfileMarkers(item.marker).template)
+      setProfileMessage(`Marcadores de “${item.label}” copiados.`)
+    } catch {
+      setProfileMessage('No se pudo copiar. Selecciona el marcador mostrado e inténtalo de nuevo.')
+    }
+  }
+
+  const startEditingScriptProfile = (item: CustomScriptProfile) => {
+    setEditingProfileId(item.id)
+    setEditProfileLabel(item.label)
+    setEditProfileMarker(item.marker)
+    setProfileMessage('')
+  }
+
+  const cancelEditingScriptProfile = () => {
+    setEditingProfileId(null)
+    setEditProfileLabel('')
+    setEditProfileMarker('')
+  }
+
+  const saveEditedScriptProfile = (event: React.FormEvent, currentProfile: CustomScriptProfile) => {
+    event.preventDefault()
+    const result = updateCustomScriptProfile(
+      customScriptProfiles, currentProfile.id, editProfileLabel, editProfileMarker)
+    if (!result) {
+      setProfileMessage('Usa un nombre y un marcador válidos que no pertenezcan a otro perfil.')
+      return
+    }
+    setCustomScriptProfiles(result.profiles)
+    if (mode === currentProfile.id) {
+      setMode(result.profile.id)
+      reset()
+    }
+    cancelEditingScriptProfile()
+    setLastDeletedProfile(null)
+    setProfileMessage(result.markerChanged
+      ? `“${result.profile.label}” fue actualizado. Cambia también el marcador en las notas que usaban “${currentProfile.marker}”.`
+      : `“${result.profile.label}” fue actualizado.`)
   }
 
   const choosePhrase = (index: number) => {
@@ -401,7 +531,7 @@ export const TeleprompterDialog: React.FC = () => {
   }
 
   const teleprompter = (
-    <div ref={shellRef} className={`teleprompter-shell ${dedicated ? 'is-dedicated' : ''} ${controlsHidden ? 'controls-hidden' : ''}`}>
+    <div ref={shellRef} className={`teleprompter-shell ${dedicated ? 'is-dedicated' : ''} ${IS_MACOS ? 'is-macos' : ''} ${controlsHidden ? 'controls-hidden' : ''}`}>
         <header className="teleprompter-topbar">
           <div className="teleprompter-brand">
             <span className={`teleprompter-rec-dot ${playing ? 'is-live' : ''}`} />
@@ -410,13 +540,19 @@ export const TeleprompterDialog: React.FC = () => {
               <strong>{snapshot.title || 'Sin título'}</strong>
             </div>
           </div>
-          <div className="teleprompter-mode-tabs" role="tablist" aria-label="Versión del guion">
-            {options.map(option => (
-              <button key={option.id} className={mode === option.id ? 'is-active' : ''} disabled={!option.text}
-                onClick={() => changeMode(option.id)} role="tab" aria-selected={mode === option.id}>
-                {option.label}
-              </button>
-            ))}
+          <div className="teleprompter-profile-strip">
+            <div className="teleprompter-mode-tabs" role="tablist" aria-label="Versión del guion / Script version">
+              {options.map(option => (
+                <button key={option.id} className={mode === option.id ? 'is-active' : ''}
+                  disabled={!option.text && !option.custom} onClick={() => changeMode(option.id)}
+                  role="tab" aria-selected={mode === option.id}>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <button className={`teleprompter-manage-profiles ${profileManagerOpen ? 'is-active' : ''}`}
+              onClick={() => { pause(); setProfileManagerOpen(true); setProfileMessage('') }}
+              aria-label="Administrar perfiles" title="Administrar perfiles">+</button>
           </div>
           <div className="teleprompter-top-actions">
             <div className="teleprompter-voice-control">
@@ -428,19 +564,130 @@ export const TeleprompterDialog: React.FC = () => {
                   tracker.seekPhrase(Math.max(0, index))
                   setActivePhrase(null)
                   setVoiceWord(-1)
-                  setVoiceStatus('Pulsa Play y lee el guion en español')
+                  setVoiceStatus(`Pulsa Play y lee el guion en ${scriptLanguage === 'en' ? 'inglés' : 'español'}`)
                 }}>Seguir mi voz</button>
               {followVoice && <span className="teleprompter-voice-status" role="status" title={voiceStatus}>
                 <span aria-hidden="true" />{voiceStatus}
               </span>}
             </div>
-            {!dedicated && <button className="teleprompter-second-window" onClick={openInSeparateWindow}
-              title="Abrir en otra ventana" aria-label="Abrir teleprompter en otra ventana">
-              <span className="teleprompter-second-window-icon" aria-hidden="true" />
-            </button>}
+            {!dedicated && <Button bare className="teleprompter-second-window" icon="app-window-expand"
+              tooltip="Abrir en otra ventana" onClick={openInSeparateWindow}
+              aria-label="Abrir teleprompter en otra ventana" />}
             <button className="teleprompter-close" onClick={toggle} aria-label="Cerrar teleprompter">×</button>
           </div>
         </header>
+
+        {profileManagerOpen && <div className="teleprompter-profile-manager-backdrop"
+          onMouseDown={event => { if (event.target === event.currentTarget) setProfileManagerOpen(false) }}>
+          <section className="teleprompter-profile-manager" role="dialog" aria-modal="true"
+            aria-labelledby="teleprompter-profile-manager-title">
+            <header>
+              <div>
+                <span className="teleprompter-kicker">BIBLIOTECA PERSONAL</span>
+                <h2 id="teleprompter-profile-manager-title">Perfiles del guion</h2>
+              </div>
+              <button onClick={() => setProfileManagerOpen(false)} aria-label="Cerrar administrador">×</button>
+            </header>
+
+            <div className="teleprompter-profile-manager-scroll">
+              <section className="teleprompter-profile-manager-section">
+                <div className="teleprompter-profile-manager-heading">
+                  <div><strong>Integrados</strong><span>Quita lo que no uses y restáuralo después.</span></div>
+                  <span>{builtInScriptProfiles.length}</span>
+                </div>
+                <div className="teleprompter-profile-list">
+                  {builtInScriptProfiles.map(item => {
+                    const hidden = hiddenScriptProfiles.includes(item.id)
+                    return <article key={item.id} className={hidden ? 'is-muted' : ''}>
+                      <div><strong>{item.label}</strong><span>{item.description}</span></div>
+                      <button onClick={() => toggleBuiltInScriptProfile(item.id)}>
+                        {hidden ? 'Restaurar' : 'Quitar'}
+                      </button>
+                    </article>
+                  })}
+                </div>
+              </section>
+
+              <section className="teleprompter-profile-manager-section">
+                <div className="teleprompter-profile-manager-heading">
+                  <div><strong>Personalizados</strong><span>Se guardan en este dispositivo.</span></div>
+                  <span>{customScriptProfiles.length}/20</span>
+                </div>
+                {customScriptProfiles.length > 0 && <div className="teleprompter-profile-list is-custom">
+                  {customScriptProfiles.map(item => editingProfileId === item.id
+                    ? <article key={item.id} className="is-editing">
+                      <form className="teleprompter-edit-profile"
+                        onSubmit={event => saveEditedScriptProfile(event, item)}>
+                        <label>
+                          <span>NOMBRE</span>
+                          <input autoFocus value={editProfileLabel} maxLength={36}
+                            onChange={event => setEditProfileLabel(event.target.value)} />
+                        </label>
+                        <label>
+                          <span>MARCADOR</span>
+                          <div className="teleprompter-marker-input">
+                            <span>profile:</span>
+                            <input value={editProfileMarker} maxLength={40}
+                              onChange={event => setEditProfileMarker(normalizeProfileMarker(event.target.value))} />
+                          </div>
+                        </label>
+                        <div className="teleprompter-profile-row-actions">
+                          <button type="button" onClick={cancelEditingScriptProfile}>Cancelar</button>
+                          <button className="is-primary" type="submit"
+                            disabled={!editProfileLabel.trim() || !editProfileMarker}>Guardar</button>
+                        </div>
+                      </form>
+                    </article>
+                    : <article key={item.id}>
+                      <div>
+                        <strong>{item.label}</strong>
+                        <code>teleprompter:profile:{item.marker}</code>
+                      </div>
+                      <div className="teleprompter-profile-row-actions">
+                        <button onClick={() => { void copyCustomProfileMarkers(item) }}>Copiar</button>
+                        <button onClick={() => startEditingScriptProfile(item)}>Editar</button>
+                        <button className="is-danger" onClick={() => deleteCustomScriptProfile(item)}>Eliminar</button>
+                      </div>
+                    </article>)}
+                </div>}
+
+                <form className="teleprompter-new-profile" onSubmit={createScriptProfile}>
+                  <div className="teleprompter-new-profile-title">
+                    <strong>Crear un perfil</strong>
+                    <span>El marcador separa su contenido dentro de cualquier nota.</span>
+                  </div>
+                  <label>
+                    <span>NOMBRE</span>
+                    <input value={draftProfileLabel} maxLength={36} placeholder="Ej. Entrevista"
+                      onChange={event => {
+                        const previousAutomatic = normalizeProfileMarker(draftProfileLabel)
+                        const label = event.target.value
+                        setDraftProfileLabel(label)
+                        if (!draftProfileMarker || draftProfileMarker === previousAutomatic) {
+                          setDraftProfileMarker(normalizeProfileMarker(label))
+                        }
+                      }} />
+                  </label>
+                  <label>
+                    <span>MARCADOR</span>
+                    <div className="teleprompter-marker-input">
+                      <span>profile:</span>
+                      <input value={draftProfileMarker} maxLength={40} placeholder="entrevista"
+                        onChange={event => setDraftProfileMarker(normalizeProfileMarker(event.target.value))} />
+                    </div>
+                  </label>
+                  <button className="teleprompter-create-profile" type="submit"
+                    disabled={!draftProfileLabel.trim() || !draftProfileMarker}>Crear perfil</button>
+                </form>
+              </section>
+            </div>
+
+            {(profileMessage || lastDeletedProfile) && <footer>
+              <span role="status">{profileMessage}</span>
+              {lastDeletedProfile && <button onClick={undoDeleteCustomProfile}>Deshacer</button>}
+            </footer>}
+          </section>
+        </div>}
 
         <main className="teleprompter-viewport" ref={viewportRef} onScroll={handleScroll}
           onDoubleClick={() => setControlsHidden(value => !value)}>
@@ -471,22 +718,22 @@ export const TeleprompterDialog: React.FC = () => {
             </div>
           ) : (
             <div className="teleprompter-empty">
-              <span>GUION VACÍO</span>
-              <h2>No encontré diálogo en esta sección.</h2>
-              <p>Prueba “Nota limpia” o añade bloques con la etiqueta “Voz / diálogo”.</p>
+              <span>{selected.custom ? 'PERFIL SIN CONTENIDO' : 'GUION VACÍO'}</span>
+              <h2>{selected.custom ? `Añade contenido para “${selected.label}”.` : 'No encontré diálogo en esta sección.'}</h2>
+              {selected.custom && selected.marker ? <>
+                <code>{getCustomProfileMarkers(selected.marker).start}</code>
+                <p>Coloca el contenido debajo y ciérralo con el marcador correspondiente.</p>
+                <button onClick={() => {
+                  const item = customScriptProfiles.find(profile => profile.id === selected.id)
+                  if (item) void copyCustomProfileMarkers(item)
+                }}>Copiar estructura</button>
+              </> : <p>Prueba “Nota limpia” o añade bloques con “Voz / diálogo” o “Voice / dialogue”.</p>}
             </div>
           )}
           {countdownValue !== null && <div className="teleprompter-countdown">{countdownValue}</div>}
         </main>
 
         <footer className="teleprompter-controls">
-          <label className="teleprompter-select teleprompter-profile">
-            <span>PERFIL</span>
-            <select value={profile} onChange={event => event.target.value !== 'custom' && applyProfile(event.target.value as ProfileId)}>
-              {profiles.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
-              {profile === 'custom' && <option value="custom">Personalizado</option>}
-            </select>
-          </label>
           <div className="teleprompter-control-group teleprompter-transport">
             <button onClick={() => goToBlock(-1)} title="Bloque anterior (←)" aria-label="Bloque anterior">‹</button>
             <button onClick={reset} title="Reiniciar (R)" aria-label="Reiniciar">↺</button>
@@ -501,12 +748,12 @@ export const TeleprompterDialog: React.FC = () => {
           <label className="teleprompter-slider">
             <span>RITMO <strong>{followVoice ? 'Tu voz' : `${speed} ppm`}</strong></span>
             <input type="range" min="60" max="240" step="5" value={speed} disabled={followVoice}
-              onChange={event => { setSpeed(Number(event.target.value)); setProfile('custom') }} />
+              onChange={event => setSpeed(Number(event.target.value))} />
           </label>
           <label className="teleprompter-slider">
             <span>TEXTO <strong>{fontSize}px</strong></span>
             <input type="range" min="32" max="104" step="2" value={fontSize}
-              onChange={event => { setFontSize(Number(event.target.value)); setProfile('custom') }} />
+              onChange={event => setFontSize(Number(event.target.value))} />
           </label>
           <label className="teleprompter-select teleprompter-font-family-select">
             <span>FUENTE</span>
@@ -524,7 +771,7 @@ export const TeleprompterDialog: React.FC = () => {
           </label>
           <label className="teleprompter-select teleprompter-countdown-select">
             <span>CUENTA ATRÁS</span>
-            <select value={countdown} onChange={event => { setCountdown(Number(event.target.value)); setProfile('custom') }}>
+            <select value={countdown} onChange={event => setCountdown(Number(event.target.value))}>
               {[0, 3, 5, 10].map(value => <option key={value} value={value}>{value === 0 ? 'Sin espera' : `${value} s`}</option>)}
             </select>
           </label>

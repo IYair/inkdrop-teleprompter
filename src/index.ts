@@ -5,12 +5,6 @@ import { TeleprompterHeaderButton } from './TeleprompterHeaderButton'
 
 class InkdropPlugin implements IInkdropPlugin {
   config: IInkdropPlugin['config'] = {
-    profile: {
-      title: 'Reading profile',
-      type: 'string',
-      default: 'youtube',
-      enum: ['youtube', 'reel', 'presentation', 'custom']
-    },
     speedWpm: {
       title: 'Reading speed (words per minute)',
       type: 'number',

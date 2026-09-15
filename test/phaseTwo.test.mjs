@@ -3,28 +3,9 @@ import test from 'node:test'
 import {
   formatDuration,
   getDedicatedSnapshot,
-  findMatchingProfile,
-  getProfile,
   isPendingForWindow,
-  moveBlock,
-  profiles
+  moveBlock
 } from '../src/phaseTwo.ts'
-
-test('provides daily-use profiles for long video, short video and presentations', () => {
-  assert.deepEqual(profiles.map(profile => profile.id), ['youtube', 'reel', 'presentation'])
-  assert.deepEqual(getProfile('reel'), {
-    id: 'reel',
-    label: 'Reel / TikTok',
-    speedWpm: 150,
-    fontSize: 54,
-    countdown: 3
-  })
-})
-
-test('labels migrated settings as custom unless they exactly match a profile', () => {
-  assert.equal(findMatchingProfile({ speedWpm: 120, fontSize: 54, countdown: 3 }), 'custom')
-  assert.equal(findMatchingProfile({ speedWpm: 150, fontSize: 54, countdown: 3 }), 'reel')
-})
 
 test('formats estimated duration as minutes and seconds', () => {
   assert.equal(formatDuration(116, 120), '0:58')

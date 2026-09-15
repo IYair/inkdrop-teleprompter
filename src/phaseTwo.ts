@@ -1,13 +1,3 @@
-export type ProfileId = 'youtube' | 'reel' | 'presentation'
-
-export interface TeleprompterProfile {
-  id: ProfileId
-  label: string
-  speedWpm: number
-  fontSize: number
-  countdown: number
-}
-
 export interface PendingSecondWindow {
   noteId?: string
   sourceWindowId?: string
@@ -24,24 +14,6 @@ export interface PendingDedicatedWindow {
   snapshot?: ScriptSnapshot
   sourceWindowId?: string
   createdAt?: number
-}
-
-export const profiles: TeleprompterProfile[] = [
-  { id: 'youtube', label: 'YouTube largo', speedWpm: 135, fontSize: 60, countdown: 3 },
-  { id: 'reel', label: 'Reel / TikTok', speedWpm: 150, fontSize: 54, countdown: 3 },
-  { id: 'presentation', label: 'Presentación', speedWpm: 115, fontSize: 48, countdown: 5 }
-]
-
-export function getProfile(id: ProfileId): TeleprompterProfile {
-  return profiles.find(profile => profile.id === id) || profiles[0]
-}
-
-export function findMatchingProfile(settings: Omit<TeleprompterProfile, 'id' | 'label'>): ProfileId | 'custom' {
-  return profiles.find(profile =>
-    profile.speedWpm === settings.speedWpm &&
-    profile.fontSize === settings.fontSize &&
-    profile.countdown === settings.countdown
-  )?.id || 'custom'
 }
 
 export function formatDuration(wordCount: number, speedWpm: number): string {

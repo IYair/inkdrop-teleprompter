@@ -6,9 +6,11 @@ import { spawn, type ChildProcess } from 'node:child_process'
 export interface VoiceCallbacks {
   onText: (text: string) => void
   onStatus: (message: string) => void
-  onReady: () => void
+  onReady: (locale?: string) => void
   onError: (message: string) => void
 }
+
+export type VoiceLanguage = 'es' | 'en'
 
 /** The private Unix socket carries transient text only. No audio or transcripts are written to disk. */
 export class NativeVoice {
@@ -20,7 +22,10 @@ export class NativeVoice {
   private active = false
   private generation = 0
 
-  constructor(private readonly callbacks: VoiceCallbacks) {}
+  constructor(
+    private readonly callbacks: VoiceCallbacks,
+    private readonly language: VoiceLanguage = 'es'
+  ) {}
 
   start(): void {
     this.stop()
@@ -58,7 +63,9 @@ export class NativeVoice {
             try {
               const message = JSON.parse(line)
               if (message.type === 'transcript' && typeof message.text === 'string') this.callbacks.onText(message.text)
-              else if (message.type === 'ready') this.callbacks.onReady()
+              else if (message.type === 'ready') this.callbacks.onReady(
+                typeof message.locale === 'string' ? message.locale : undefined
+              )
               else if (message.type === 'status' && typeof message.message === 'string') this.callbacks.onStatus(message.message)
               else if (message.type === 'error' && typeof message.message === 'string') this.fail(message.message)
             } catch { this.fail('Respuesta inválida del asistente de voz. Vuelve a iniciar la escucha.') }
@@ -71,7 +78,9 @@ export class NativeVoice {
       this.server.listen(path, () => {
         if (!isCurrent()) return
         // LaunchServices gives the helper its own macOS privacy identity and prompts.
-        this.launcher = spawn('/usr/bin/open', ['-n', '-W', app, '--args', '--socket', path], { stdio: 'ignore' })
+        this.launcher = spawn('/usr/bin/open', [
+          '-n', '-W', app, '--args', '--socket', path, '--language', this.language
+        ], { stdio: 'ignore' })
         this.launcher.on('error', () => fail('No se pudo abrir Teleprompter Voice.'))
         this.launcher.on('exit', () => {
           fail('Teleprompter Voice se cerró. Pulsa Play para volver a intentarlo.')
